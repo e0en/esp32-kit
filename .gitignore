@@ -1,0 +1,5 @@
+/.cache
+/build
+/main/build
+/main/secret.h
+sdkconfig.old
