@@ -3,11 +3,13 @@
 #include <esp_netif.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/event_groups.h>
+#include <mqtt5_client.h>
 #include <nvs_flash.h>
 
+#include "esp_event_base.h"
 #include "gpio.h"
 #include "mpu6050.h"
-#include "portmacro.h"
+#include "mqtt_client.h"
 #include "secret.h"
 #include "wifi.h"
 
@@ -16,6 +18,46 @@ gpio_num_t RED_LED_PIN = GPIO_NUM_9;
 
 struct int16_3 gyro;
 struct int16_3 accel;
+
+static void event_handler(void *handler_args, esp_event_base_t base,
+                          int32_t event_id, void *event_data) {
+  esp_mqtt_event_handle_t event = event_data;
+  switch ((esp_mqtt_event_id_t)event_id) {
+  case MQTT_EVENT_CONNECTED:
+    break;
+  case MQTT_EVENT_DISCONNECTED:
+    break;
+  case MQTT_EVENT_PUBLISHED:
+    break;
+  default:
+    break;
+  }
+}
+
+esp_err_t publish(esp_mqtt5_client_handle_t client, const char *topic,
+                  const char *payload) {
+  esp_mqtt_client_publish(client, topic, payload, strlen(payload), 0, false);
+}
+
+esp_mqtt5_client_handle_t init_mqtt() {
+  const esp_mqtt_client_config_t config = {
+      .broker = {.address =
+                     {
+                         .uri = MQTT_URI,
+                     }},
+      .credentials = {.username = MQTT_USER,
+                      .authentication =
+                          {
+                              .password = MQTT_PASSWORD,
+                          }},
+      .session = {
+          .protocol_ver = MQTT_PROTOCOL_V_5,
+      }};
+  esp_mqtt5_client_handle_t client = esp_mqtt_client_init(&config);
+  esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, event_handler, NULL);
+  esp_mqtt_client_start(client);
+  return client;
+}
 
 void initialize() {
   ESP_ERROR_CHECK(set_pin_mode(GREEN_LED_PIN, GPIO_MODE_OUTPUT));
@@ -40,6 +82,8 @@ void initialize() {
   ESP_LOGI("INIT", "I2C");
   init_mpu6050();
   ESP_LOGI("INIT", "finished");
+
+  init_mqtt();
 }
 
 void led_task(void *pvParameters) {
@@ -66,13 +110,12 @@ void imu_task(void *pvParameters) {
     if (mpu6050_is_data_ready()) {
       gyro = mpu6050_read_gyro();
       accel = mpu6050_read_accel();
-      ESP_LOGI("imu", "MPU6050 = (%d,%d,%d), (%d,%d,%d)", gyro.x, gyro.y,
-               gyro.z, accel.x, accel.y, accel.z);
     }
-    vTaskDelay(10 / portTICK_PERIOD_MS);
   }
   vTaskDelete(NULL);
 }
+
+void mqtt_task(void *pvParameters) { vTaskDelete(NULL); }
 
 void app_main(void) {
   initialize();
