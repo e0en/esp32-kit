@@ -1,4 +1,6 @@
-#include "wifi.h"
+#include "wifi.hpp"
+
+extern "C" {
 #include <esp_event.h>
 #include <esp_log.h>
 #include <esp_netif_ip_addr.h>
@@ -6,6 +8,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/event_groups.h>
 #include <string.h>
+}
 
 const size_t WIFI_MAX_RETRY = 10;
 static int s_retry_num = 0;
