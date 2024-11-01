@@ -1,4 +1,5 @@
 #include "wifi.hpp"
+#include "freertos/projdefs.h"
 
 extern "C" {
 #include <esp_event.h>
@@ -79,6 +80,8 @@ void init_wifi(const char *ssid, const char *password) {
     ESP_LOGI(TAG, "connected to ap SSID:%s password:%s", ssid, password);
   } else if (bits & WIFI_FAIL_BIT) {
     ESP_LOGI(TAG, "Failed to connect to SSID:%s, password:%s", ssid, password);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    esp_restart();
   } else {
     ESP_LOGE(TAG, "UNEXPECTED EVENT");
   }
