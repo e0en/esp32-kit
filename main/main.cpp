@@ -11,8 +11,11 @@ extern "C" {
 
 #include "gpio.hpp"
 #include "mpu6050.hpp"
+#include "mqtt.hpp"
 #include "secret.h"
 #include "wifi.hpp"
+
+#define MQTT_TOPIC "/esp32-kit/imu6"
 
 gpio_num_t GREEN_LED_PIN = GPIO_NUM_8;
 gpio_num_t RED_LED_PIN = GPIO_NUM_9;
@@ -20,20 +23,14 @@ gpio_num_t RED_LED_PIN = GPIO_NUM_9;
 struct int16_3 gyro;
 struct int16_3 accel;
 
-static void event_handler(void *handler_args, esp_event_base_t base,
-                          int32_t event_id, void *event_data) {
-  esp_mqtt_event_handle_t event = (esp_mqtt_event_handle_t)event_data;
-  switch ((esp_mqtt_event_id_t)event_id) {
-  case MQTT_EVENT_CONNECTED:
-    break;
-  case MQTT_EVENT_DISCONNECTED:
-    break;
-  case MQTT_EVENT_PUBLISHED:
-    break;
-  default:
-    break;
-  }
-}
+struct MQTTPayload {
+  int16_t gx;
+  int16_t gy;
+  int16_t gz;
+  int16_t ax;
+  int16_t ay;
+  int16_t az;
+};
 
 void initialize() {
   ESP_ERROR_CHECK(set_pin_mode(GREEN_LED_PIN, GPIO_MODE_OUTPUT));
@@ -89,10 +86,25 @@ void imu_task(void *pvParameters) {
   vTaskDelete(NULL);
 }
 
-void mqtt_task(void *pvParameters) { vTaskDelete(NULL); }
+void mqtt_task(void *pvParameters) {
+  MQTTPayload buffer;
+  MQTTClient mqtt(MQTT_URI, "esp32-kit", MQTT_USERNAME, MQTT_PASSWORD);
+  ESP_ERROR_CHECK(mqtt.connect());
+  while (1) {
+    buffer = {
+        gyro.x, gyro.y, gyro.z, accel.x, accel.y, accel.z,
+    };
+    mqtt.publish(MQTT_TOPIC, reinterpret_cast<char *>(&buffer), 0);
+    ESP_LOGI("MQTT", "sent %d, %d, %d, %d, %d, %d", gyro.x, gyro.y, gyro.z,
+             accel.x, accel.y, accel.z);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+  }
+  vTaskDelete(NULL);
+}
 
 extern "C" void app_main(void) {
   initialize();
   xTaskCreate(led_task, "led", 8192, NULL, 5, NULL);
   xTaskCreate(imu_task, "imu", 8192, NULL, 5, NULL);
+  xTaskCreate(mqtt_task, "mqtt", 8192, NULL, 5, NULL);
 }

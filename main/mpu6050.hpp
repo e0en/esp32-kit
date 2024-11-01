@@ -1,6 +1,5 @@
 #ifndef MPU6050_H
 #define MPU6050_H
-#include <cstdint>
 
 extern "C" {
 #include <driver/gpio.h>
