@@ -79,8 +79,7 @@ void imu_task(void *pvParameters) {
 
   while (1) {
     if (imu.is_data_ready()) {
-      gyro = imu.read_gyro();
-      accel = imu.read_accel();
+      imu.read_accel_gyro(&accel, &gyro);
     }
   }
   vTaskDelete(NULL);
