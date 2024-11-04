@@ -163,6 +163,17 @@ void MPU6050::set_gyro_range(uint8_t range) {
 }
 
 MPU6050::MPU6050() {
+  i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+
+  i2c_master_start(cmd);
+  i2c_master_write_byte(cmd, (I2C_ADDRESS << 1) | I2C_MASTER_WRITE, true);
+  i2c_master_stop(cmd);
+
+  esp_err_t ret = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(50));
+  i2c_cmd_link_delete(cmd);
+  ESP_ERROR_CHECK(ret);
+
+  ESP_ERROR_CHECK(whoami());
   use_gyrox_clock();
   ESP_LOGI("INIT_MPU6050", "clock");
   set_accel_range(ACCEL_RANGE);
