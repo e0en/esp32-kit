@@ -32,6 +32,7 @@ public:
   bool is_data_ready();
 
   void read_accel_gyro(struct int16_3 *accel, struct int16_3 *gyro);
+  void read_accel_gyro_si(struct float_3 *accel, struct float_3 *gyro);
   struct int16_3 read_accel();
   struct int16_3 read_gyro();
   float read_temperature();
@@ -40,7 +41,9 @@ public:
   void calibrate_gyro();
 
 private:
-  int16_3 gyro_offset;
+  int16_3 gyro_offset = {0, 0, 0};
+  int16_t accel_range = 2;  // unit = g
+  int16_t gyro_range = 250; // unit = degree / second
 
   esp_err_t select_register(uint8_t register_address);
   esp_err_t read(uint8_t register_address, uint8_t *target, size_t length);

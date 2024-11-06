@@ -17,19 +17,19 @@ extern "C" {
 
 #define MQTT_TOPIC "/esp32-kit/imu6"
 
-gpio_num_t GREEN_LED_PIN = GPIO_NUM_8;
-gpio_num_t RED_LED_PIN = GPIO_NUM_9;
+gpio_num_t GREEN_LED_PIN = GPIO_NUM_9;
+gpio_num_t RED_LED_PIN = GPIO_NUM_7;
 
-struct int16_3 gyro;
-struct int16_3 accel;
+struct float_3 gyro;
+struct float_3 accel;
 
 struct MQTTPayload {
-  int16_t gx;
-  int16_t gy;
-  int16_t gz;
-  int16_t ax;
-  int16_t ay;
-  int16_t az;
+  float gx;
+  float gy;
+  float gz;
+  float ax;
+  float ay;
+  float az;
 };
 
 void initialize() {
@@ -69,17 +69,18 @@ void led_task(void *pvParameters) {
 
 void imu_task(void *pvParameters) {
   auto imu = MPU6050();
-  gyro.x = 0;
-  gyro.y = 0;
-  gyro.z = 0;
+  imu.calibrate_gyro();
+  gyro.x = 0.0;
+  gyro.y = 0.0;
+  gyro.z = 0.0;
 
-  accel.x = 0;
-  accel.y = 0;
-  accel.z = 0;
+  accel.x = 0.0;
+  accel.y = 0.0;
+  accel.z = 0.0;
 
   while (1) {
     if (imu.is_data_ready()) {
-      imu.read_accel_gyro(&accel, &gyro);
+      imu.read_accel_gyro_si(&accel, &gyro);
     }
   }
   vTaskDelete(NULL);
@@ -93,8 +94,9 @@ void mqtt_task(void *pvParameters) {
     buffer = {
         gyro.x, gyro.y, gyro.z, accel.x, accel.y, accel.z,
     };
-    mqtt.publish(MQTT_TOPIC, reinterpret_cast<char *>(&buffer), 0);
-    ESP_LOGI("MQTT", "sent %d, %d, %d, %d, %d, %d", gyro.x, gyro.y, gyro.z,
+    mqtt.publish(MQTT_TOPIC, reinterpret_cast<char *>(&buffer), sizeof(buffer),
+                 0);
+    ESP_LOGI("MQTT", "sent %f, %f, %f, %f, %f, %f", gyro.x, gyro.y, gyro.z,
              accel.x, accel.y, accel.z);
     vTaskDelay(100 / portTICK_PERIOD_MS);
   }

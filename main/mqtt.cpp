@@ -40,8 +40,9 @@ esp_err_t MQTTClient::connect() {
   return ESP_ERR_TIMEOUT;
 }
 
-esp_err_t MQTTClient::publish(const char *topic, const char *payload, int qos) {
-  esp_mqtt_client_publish(client_, topic, payload, strlen(payload), qos, false);
+esp_err_t MQTTClient::publish(const char *topic, const char *payload,
+                              size_t length, int qos) {
+  esp_mqtt_client_publish(client_, topic, payload, length, qos, false);
   return ESP_OK;
 }
 

@@ -44,7 +44,8 @@ public:
     }
   };
   esp_err_t connect();
-  esp_err_t publish(const char *topic, const char *payload, int qos);
+  esp_err_t publish(const char *topic, const char *payload, size_t length,
+                    int qos);
   void subscribe(const char *topic, MessageHandler callback);
 };
 

@@ -10,6 +10,13 @@ extern "C" {
 #include <hal/gpio_types.h>
 }
 
+const float PI = 3.14159265;
+const float DEGREE_TO_RADIAN = PI / 180.0;
+const float GRAVITY = 9.80665;
+
+const float ACCEL_COEFFICIENT = GRAVITY / (1 << 15);
+const float GYRO_COEFFICIENT = DEGREE_TO_RADIAN / (1 << 15);
+
 const uint16_t I2C_ADDRESS = 0x68;
 const unsigned BAUD_RATE = 400000;
 
@@ -154,11 +161,13 @@ void MPU6050::set_filter_config(uint8_t flag) {
 
 void MPU6050::set_accel_range(uint8_t range) {
   uint8_t byte = range << 3;
+  accel_range = 2 << range;
   write(REGISTER_ACCEL_CONFIG, &byte, 1);
 }
 
 void MPU6050::set_gyro_range(uint8_t range) {
   uint8_t byte = range << 3;
+  gyro_range = 250 << range;
   write(REGISTER_GYRO_CONFIG, &byte, 1);
 }
 
@@ -192,12 +201,24 @@ bool MPU6050::is_data_ready() {
 void MPU6050::read_accel_gyro(struct int16_3 *accel, struct int16_3 *gyro) {
   uint8_t bytes[14];
   read(REGISTER_ACCEL_XOUT_H, bytes, 14);
-  accel->x = (bytes[0] << 8) | bytes[1];
-  accel->y = (bytes[2] << 8) | bytes[3];
-  accel->z = (bytes[4] << 8) | bytes[5];
-  gyro->x = (bytes[8] << 8) | bytes[9];
-  gyro->y = (bytes[10] << 8) | bytes[11];
-  gyro->z = (bytes[12] << 8) | bytes[13];
+  accel->x = (int16_t)((bytes[0] << 8) | bytes[1]);
+  accel->y = (int16_t)((bytes[2] << 8) | bytes[3]);
+  accel->z = (int16_t)((bytes[4] << 8) | bytes[5]);
+  gyro->x = (int16_t)((bytes[8] << 8) | bytes[9]) - gyro_offset.x;
+  gyro->y = (int16_t)((bytes[10] << 8) | bytes[11]) - gyro_offset.y;
+  gyro->z = (int16_t)((bytes[12] << 8) | bytes[13]) - gyro_offset.z;
+}
+
+void MPU6050::read_accel_gyro_si(struct float_3 *accel, struct float_3 *gyro) {
+  int16_3 accel_raw, gyro_raw;
+  read_accel_gyro(&accel_raw, &gyro_raw);
+  accel->x = static_cast<float>(accel_raw.x) * accel_range * ACCEL_COEFFICIENT;
+  accel->y = static_cast<float>(accel_raw.y) * accel_range * ACCEL_COEFFICIENT;
+  accel->z = static_cast<float>(accel_raw.z) * accel_range * ACCEL_COEFFICIENT;
+
+  gyro->x = static_cast<float>(gyro_raw.x) * gyro_range * GYRO_COEFFICIENT;
+  gyro->y = static_cast<float>(gyro_raw.y) * gyro_range * GYRO_COEFFICIENT;
+  gyro->z = static_cast<float>(gyro_raw.z) * gyro_range * GYRO_COEFFICIENT;
 }
 
 struct int16_3 MPU6050::read_accel() {
@@ -214,9 +235,9 @@ struct int16_3 MPU6050::read_gyro() {
   struct int16_3 result;
   uint8_t bytes[6];
   read(REGISTER_GYRO_XOUT_H, bytes, 6);
-  result.x = (bytes[0] << 8) | bytes[1];
-  result.y = (bytes[2] << 8) | bytes[3];
-  result.z = (bytes[4] << 8) | bytes[5];
+  result.x = ((bytes[0] << 8) | bytes[1]);
+  result.y = ((bytes[2] << 8) | bytes[3]);
+  result.z = ((bytes[4] << 8) | bytes[5]);
   return result;
 }
 
@@ -225,32 +246,6 @@ float MPU6050::read_temperature() {
   read(REGISTER_TEMP_XOUT_H, bytes, 2);
   int16_t reading = (bytes[0] << 8) | bytes[1];
   return (float)reading / 340.0 + 36.53;
-}
-
-struct float_3 accel_to_si_unit(struct int16_3 accel, uint8_t accel_range,
-                                struct int16_3 offset) {
-  // convert to meters / second^2
-  struct float_3 result;
-  float coefficient = 2 << accel_range;
-  float max_value = coefficient * 9.8;
-  float multiplier = max_value / ((int16_t)1 << 15);
-  result.x = ((float)accel.x - (float)offset.x) * multiplier;
-  result.y = ((float)accel.y - (float)offset.y) * multiplier;
-  result.z = ((float)accel.z - (float)offset.z) * multiplier;
-  return result;
-}
-
-struct float_3 gyro_to_si_unit(struct int16_3 gyro, uint8_t gyro_range,
-                               struct int16_3 offset) {
-  // convert to degree / second
-  struct float_3 result;
-  float coefficient = 2 << gyro_range;
-  float max_value = coefficient * 250;
-  float multiplier = max_value / ((int16_t)1 << 15);
-  result.x = ((float)gyro.x - (float)offset.x) * multiplier;
-  result.y = ((float)gyro.y - (float)offset.y) * multiplier;
-  result.z = ((float)gyro.z - (float)offset.z) * multiplier;
-  return result;
 }
 
 struct int16_3 MPU6050::calibrate_accel() {
@@ -284,12 +279,12 @@ struct int16_3 MPU6050::calibrate_accel() {
 }
 
 void MPU6050::calibrate_gyro() {
-  struct int16_3 gyro, offset;
+  struct int16_3 gyro;
   struct float_3 mean = {0, 0, 0};
 
   bool is_ready = false;
   size_t sample_count = 0;
-  while (sample_count < 100) {
+  while (sample_count < 300) {
     is_ready = is_data_ready();
     if (!is_ready) {
       continue;
@@ -303,10 +298,11 @@ void MPU6050::calibrate_gyro() {
   mean.x /= sample_count;
   mean.y /= sample_count;
   mean.z /= sample_count;
+
   gyro_offset = {
-      (int16_t)(mean.x / sample_count),
-      (int16_t)(mean.y / sample_count),
-      (int16_t)(mean.z / sample_count),
+      (int16_t)(mean.x),
+      (int16_t)(mean.y),
+      (int16_t)(mean.z),
   };
 }
 
