@@ -17,8 +17,8 @@ extern "C" {
 
 #define MQTT_TOPIC "/esp32-kit/imu6"
 
-gpio_num_t GREEN_LED_PIN = GPIO_NUM_9;
-gpio_num_t RED_LED_PIN = GPIO_NUM_7;
+gpio_num_t GREEN_LED_PIN = GPIO_NUM_8;
+gpio_num_t RED_LED_PIN = GPIO_NUM_10;
 
 struct float_3 gyro;
 struct float_3 accel;
