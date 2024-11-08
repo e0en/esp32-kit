@@ -97,7 +97,13 @@ void mqtt_task(void *pvParameters) {
   ESP_ERROR_CHECK(mqtt.connect());
   while (1) {
     buffer = {
-        gyro.x, gyro.y, gyro.z, accel.x, accel.y, accel.z, esp_timer_get_time(),
+        gyro.x,
+        gyro.y,
+        gyro.z,
+        accel.x,
+        accel.y,
+        accel.z,
+        get_timestamp_microseconds(),
     };
     mqtt.publish(MQTT_TOPIC, reinterpret_cast<char *>(&buffer), sizeof(buffer),
                  0);
