@@ -3,6 +3,7 @@ extern "C" {
 #include <esp_event_base.h>
 #include <esp_log.h>
 #include <esp_netif.h>
+#include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/event_groups.h>
 #include <mqtt_client.h>
@@ -13,6 +14,7 @@ extern "C" {
 #include "mpu6050.hpp"
 #include "mqtt.hpp"
 #include "secret.h"
+#include "sntp.hpp"
 #include "wifi.hpp"
 
 #define MQTT_TOPIC "/esp32-kit/imu6"
@@ -30,6 +32,7 @@ struct MQTTPayload {
   float ax;
   float ay;
   float az;
+  int64_t timestamp_microseconds;
 };
 
 void initialize() {
@@ -51,6 +54,8 @@ void initialize() {
   esp_netif_init();
   init_wifi(WIFI_SSID, WIFI_PASSWORD);
   ESP_LOGI("INIT", "WiFi");
+  init_sntp();
+  ESP_LOGI("INIT", "TIME");
   init_i2c(GPIO_NUM_6, GPIO_NUM_7);
   ESP_LOGI("INIT", "I2C");
   ESP_LOGI("INIT", "finished");
@@ -92,12 +97,12 @@ void mqtt_task(void *pvParameters) {
   ESP_ERROR_CHECK(mqtt.connect());
   while (1) {
     buffer = {
-        gyro.x, gyro.y, gyro.z, accel.x, accel.y, accel.z,
+        gyro.x, gyro.y, gyro.z, accel.x, accel.y, accel.z, esp_timer_get_time(),
     };
     mqtt.publish(MQTT_TOPIC, reinterpret_cast<char *>(&buffer), sizeof(buffer),
                  0);
-    ESP_LOGI("MQTT", "sent %f, %f, %f, %f, %f, %f", gyro.x, gyro.y, gyro.z,
-             accel.x, accel.y, accel.z);
+    ESP_LOGI("MQTT", "sent %f, %f, %f, %f, %f, %f, %llu", gyro.x, gyro.y,
+             gyro.z, accel.x, accel.y, accel.z, buffer.timestamp_microseconds);
     vTaskDelay(100 / portTICK_PERIOD_MS);
   }
   vTaskDelete(NULL);
