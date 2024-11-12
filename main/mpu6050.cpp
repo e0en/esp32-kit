@@ -209,7 +209,7 @@ void MPU6050::read_accel_gyro(struct int16_3 *accel, struct int16_3 *gyro) {
   gyro->z = (int16_t)((bytes[12] << 8) | bytes[13]) - gyro_offset.z;
 }
 
-void MPU6050::read_accel_gyro_si(struct float_3 *accel, struct float_3 *gyro) {
+void MPU6050::read_accel_gyro_si(struct Vector3 *accel, struct Vector3 *gyro) {
   int16_3 accel_raw, gyro_raw;
   read_accel_gyro(&accel_raw, &gyro_raw);
   accel->x = static_cast<float>(accel_raw.x) * accel_range * ACCEL_COEFFICIENT;
@@ -250,7 +250,7 @@ float MPU6050::read_temperature() {
 
 struct int16_3 MPU6050::calibrate_accel() {
   struct int16_3 accel, offset;
-  struct float_3 mean;
+  struct Vector3 mean;
   mean.x = 0;
   mean.y = 0;
   mean.z = 0;
@@ -280,7 +280,7 @@ struct int16_3 MPU6050::calibrate_accel() {
 
 void MPU6050::calibrate_gyro() {
   struct int16_3 gyro;
-  struct float_3 mean = {0, 0, 0};
+  struct Vector3 mean = {0, 0, 0};
 
   bool is_ready = false;
   size_t sample_count = 0;

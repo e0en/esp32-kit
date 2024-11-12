@@ -15,6 +15,7 @@ extern "C" {
 #include "mqtt.hpp"
 #include "secret.h"
 #include "sntp.hpp"
+#include "vector_math.hpp"
 #include "wifi.hpp"
 
 #define MQTT_TOPIC "/esp32-kit/imu6"
@@ -22,12 +23,14 @@ extern "C" {
 gpio_num_t GREEN_LED_PIN = GPIO_NUM_8;
 gpio_num_t RED_LED_PIN = GPIO_NUM_10;
 
-struct float_3 gyro;
-struct float_3 accel;
+struct Vector3 gyro;
+struct Vector3 accel;
+struct Vector3 orientation_cf;
 
 struct MQTTPayload {
-  float_3 gyro;
-  float_3 accel;
+  Vector3 gyro;
+  Vector3 accel;
+  Vector3 orientation_cf;
   int64_t timestamp_microseconds;
 };
 
@@ -81,8 +84,6 @@ void mqtt_task(void *pvParameters) {
     buffer = {gyro, accel, now};
     mqtt.publish(MQTT_TOPIC, reinterpret_cast<char *>(&buffer), sizeof(buffer),
                  0);
-    ESP_LOGI("MQTT", "sent %f, %f, %f, %f, %f, %f, %llu", gyro.x, gyro.y,
-             gyro.z, accel.x, accel.y, accel.z, buffer.timestamp_microseconds);
     vTaskDelay(100 / portTICK_PERIOD_MS);
   }
   vTaskDelete(NULL);

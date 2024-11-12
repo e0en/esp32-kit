@@ -5,17 +5,12 @@ extern "C" {
 #include <driver/gpio.h>
 #include <esp_err.h>
 }
+#include "vector_math.hpp"
 
 struct int16_3 {
   int16_t x;
   int16_t y;
   int16_t z;
-};
-
-struct float_3 {
-  float x;
-  float y;
-  float z;
 };
 
 class MPU6050 {
@@ -32,7 +27,7 @@ public:
   bool is_data_ready();
 
   void read_accel_gyro(struct int16_3 *accel, struct int16_3 *gyro);
-  void read_accel_gyro_si(struct float_3 *accel, struct float_3 *gyro);
+  void read_accel_gyro_si(struct Vector3 *accel, struct Vector3 *gyro);
   struct int16_3 read_accel();
   struct int16_3 read_gyro();
   float read_temperature();
