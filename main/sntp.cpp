@@ -17,7 +17,7 @@ void init_sntp() {
   esp_netif_sntp_init(&config);
 
   int retry = 0;
-  const int retry_count = 15;
+  const int retry_count = 30;
   while (esp_netif_sntp_sync_wait(2000 / portTICK_PERIOD_MS) ==
              ESP_ERR_TIMEOUT &&
          ++retry < retry_count) {
