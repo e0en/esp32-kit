@@ -26,12 +26,8 @@ struct float_3 gyro;
 struct float_3 accel;
 
 struct MQTTPayload {
-  float gx;
-  float gy;
-  float gz;
-  float ax;
-  float ay;
-  float az;
+  float_3 gyro;
+  float_3 accel;
   int64_t timestamp_microseconds;
 };
 
@@ -59,30 +55,14 @@ void initialize() {
   init_i2c(GPIO_NUM_6, GPIO_NUM_7);
   ESP_LOGI("INIT", "I2C");
   ESP_LOGI("INIT", "finished");
-}
-
-void led_task(void *pvParameters) {
-  while (1) {
-    gpio_set_level(GREEN_LED_PIN, 0);
-    gpio_set_level(RED_LED_PIN, 1);
-    vTaskDelay(250 / portTICK_PERIOD_MS);
-    gpio_set_level(GREEN_LED_PIN, 1);
-    gpio_set_level(RED_LED_PIN, 0);
-    vTaskDelay(250 / portTICK_PERIOD_MS);
-  }
+  gpio_set_level(GREEN_LED_PIN, 1);
 }
 
 void imu_task(void *pvParameters) {
   auto imu = MPU6050();
   imu.calibrate_gyro();
-  gyro.x = 0.0;
-  gyro.y = 0.0;
-  gyro.z = 0.0;
-
-  accel.x = 0.0;
-  accel.y = 0.0;
-  accel.z = 0.0;
-
+  gyro = {0.0, 0.0, 0.0};
+  accel = {0.0, 0.0, 0.0};
   while (1) {
     if (imu.is_data_ready()) {
       imu.read_accel_gyro_si(&accel, &gyro);
@@ -95,16 +75,10 @@ void mqtt_task(void *pvParameters) {
   MQTTPayload buffer;
   MQTTClient mqtt(MQTT_URI, "esp32-kit", MQTT_USERNAME, MQTT_PASSWORD);
   ESP_ERROR_CHECK(mqtt.connect());
+  int64_t now = 0;
   while (1) {
-    buffer = {
-        gyro.x,
-        gyro.y,
-        gyro.z,
-        accel.x,
-        accel.y,
-        accel.z,
-        get_timestamp_microseconds(),
-    };
+    now = get_timestamp_microseconds();
+    buffer = {gyro, accel, now};
     mqtt.publish(MQTT_TOPIC, reinterpret_cast<char *>(&buffer), sizeof(buffer),
                  0);
     ESP_LOGI("MQTT", "sent %f, %f, %f, %f, %f, %f, %llu", gyro.x, gyro.y,
@@ -116,7 +90,6 @@ void mqtt_task(void *pvParameters) {
 
 extern "C" void app_main(void) {
   initialize();
-  xTaskCreate(led_task, "led", 8192, NULL, 5, NULL);
   xTaskCreate(imu_task, "imu", 8192, NULL, 5, NULL);
   xTaskCreate(mqtt_task, "mqtt", 8192, NULL, 5, NULL);
 }

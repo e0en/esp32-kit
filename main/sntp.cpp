@@ -1,8 +1,10 @@
+extern "C" {
 #include <esp_log.h>
 #include <esp_netif_sntp.h>
 #include <esp_sntp.h>
 #include <esp_timer.h>
 #include <sys/time.h>
+}
 
 int64_t get_timestamp_microseconds() {
   struct timeval tv_now;
@@ -11,14 +13,8 @@ int64_t get_timestamp_microseconds() {
 }
 
 void init_sntp() {
-  //  esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
   esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("time.windows.com");
   esp_netif_sntp_init(&config);
-  /*
-  if (esp_netif_sntp_sync_wait(pdMS_TO_TICKS(10000)) != ESP_OK) {
-    ESP_LOGE("SNTP", "Failed to update system time within 10s timeout");
-  }
-  */
 
   int retry = 0;
   const int retry_count = 15;
@@ -28,6 +24,4 @@ void init_sntp() {
     ESP_LOGI("SNTP", "Waiting for system time to be set... (%d/%d)", retry,
              retry_count);
   }
-
-  ESP_LOGI("SNTP", "%llu", get_timestamp_microseconds());
 }
