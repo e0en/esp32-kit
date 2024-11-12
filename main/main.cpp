@@ -11,6 +11,7 @@ extern "C" {
 }
 
 #include "gpio.hpp"
+#include "imu.hpp"
 #include "mpu6050.hpp"
 #include "mqtt.hpp"
 #include "secret.h"
@@ -23,14 +24,15 @@ extern "C" {
 gpio_num_t GREEN_LED_PIN = GPIO_NUM_8;
 gpio_num_t RED_LED_PIN = GPIO_NUM_10;
 
+SemaphoreHandle_t imu_mutex = xSemaphoreCreateMutex();
 struct Vector3 gyro;
 struct Vector3 accel;
-struct Vector3 orientation_cf;
+struct Quaternion cf;
 
 struct MQTTPayload {
   Vector3 gyro;
   Vector3 accel;
-  Vector3 orientation_cf;
+  Quaternion cf;
   int64_t timestamp_microseconds;
 };
 
@@ -66,9 +68,25 @@ void imu_task(void *pvParameters) {
   imu.calibrate_gyro();
   gyro = {0.0, 0.0, 0.0};
   accel = {0.0, 0.0, 0.0};
+  cf = {0.0, 0.0, 0.0, 1.0};
+
+  float tau = 0.98;
+  int64_t now = get_timestamp_microseconds();
+  int64_t prev = now;
+  float dt = 0.0;
   while (1) {
     if (imu.is_data_ready()) {
-      imu.read_accel_gyro_si(&accel, &gyro);
+      now = get_timestamp_microseconds();
+      dt = (now - prev) / 1e6;
+      if (dt < 1e-4) {
+        continue;
+      }
+      prev = now;
+      if (xSemaphoreTake(imu_mutex, portMAX_DELAY) == pdTRUE) {
+        imu.read_accel_gyro_si(&accel, &gyro);
+        cf = complementary_filter(cf, gyro, accel, dt, tau);
+        xSemaphoreGive(imu_mutex);
+      }
     }
   }
   vTaskDelete(NULL);
@@ -81,9 +99,14 @@ void mqtt_task(void *pvParameters) {
   int64_t now = 0;
   while (1) {
     now = get_timestamp_microseconds();
-    buffer = {gyro, accel, now};
+    if (xSemaphoreTake(imu_mutex, portMAX_DELAY) == pdTRUE) {
+      buffer = {gyro, accel, cf, now};
+      xSemaphoreGive(imu_mutex);
+    }
     mqtt.publish(MQTT_TOPIC, reinterpret_cast<char *>(&buffer), sizeof(buffer),
                  0);
+    ESP_LOGI("MQTT", "Sent (%.3f, %.3f, %.3f: %.3f) %llu", (double)cf.x,
+             (double)cf.y, (double)cf.z, (double)cf.w, now);
     vTaskDelay(100 / portTICK_PERIOD_MS);
   }
   vTaskDelete(NULL);
