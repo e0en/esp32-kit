@@ -35,7 +35,7 @@ const uint8_t REGISTER_WHO_AM_I = 0x75;
 const unsigned SLEEP_BIT = 6;
 
 const uint8_t ACCEL_RANGE = 0;
-const uint8_t GYRO_RANGE = 0;
+const uint8_t GYRO_RANGE = 2;
 
 esp_err_t MPU6050::select_register(uint8_t register_address) {
   esp_err_t error_code;

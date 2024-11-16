@@ -28,6 +28,27 @@ Quaternion accel_to_quaternion(const Vector3 accel) {
 
 Quaternion integrate_gyro(const Quaternion orientation, const Vector3 gyro,
                           const float dt) {
+  float max_angle = M_PI / 4;
+  if (abs(gyro.x) > max_angle || abs(gyro.y) > max_angle ||
+      abs(gyro.z) > max_angle) {
+    size_t n_x = ceil(abs(gyro.x) / max_angle);
+    size_t n_y = ceil(abs(gyro.y) / max_angle);
+    size_t n_z = ceil(abs(gyro.z) / max_angle);
+    size_t n = n_x > n_y ? n_x : n_y;
+    n = n > n_z ? n : n_z;
+    ESP_LOGW("GYRO", "Rotating too fast (%.2f, %.2f, %.2f)",
+             (double)gyro.x / M_PI, (double)gyro.y / M_PI,
+             (double)gyro.z / M_PI);
+    ESP_LOGW("GYRO", "Looping for %d times", n);
+
+    Quaternion q = orientation;
+    for (size_t i = 0; i < n; i++) {
+      Quaternion q_gyro = {gyro.x / n, gyro.y / n, gyro.z / n, 0.0};
+      Quaternion dq = scale(multiply(q, q_gyro), 0.5);
+      q = normalize(add(q, scale(dq, dt)));
+    }
+    return q;
+  }
   Quaternion q_gyro = {gyro.x, gyro.y, gyro.z, 0.0};
   Quaternion dq = scale(multiply(orientation, q_gyro), 0.5);
   return normalize(add(orientation, scale(dq, dt)));
@@ -47,14 +68,14 @@ Quaternion complementary_filter(const Quaternion &previous, const Vector3 &gyro,
   }
   Vector3 e_gyro = quaternion_to_euler(q_gyro);
   Vector3 e_accel = quaternion_to_euler(q_accel);
-  float gyro_rotation = e_gyro.z;
+  float gyro_yaw = e_gyro.z;
   e_gyro.z = 0;
   e_accel.z = 0;
 
   Quaternion q_new =
       slerp(euler_to_quaternion(e_gyro), euler_to_quaternion(e_accel), t);
   Vector3 e_new = quaternion_to_euler(q_new);
-  e_new.z = gyro_rotation;
+  e_new.z = gyro_yaw;
   auto q = euler_to_quaternion(e_new);
   if (q.x != q.x) {
     ESP_LOGE("CF", "dt = %f", (double)dt);
