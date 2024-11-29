@@ -194,43 +194,10 @@ Quaternion slerp(const Quaternion &q1, const Quaternion &q2, float t) {
   return result;
 }
 
-Vector3 quaternion_to_euler(const Quaternion &q) {
-  float sinr_cosp = 2.0 * (q.w * q.x + q.y * q.z);
-  float cosr_cosp = 1.0 - 2.0 * (q.x * q.x + q.y * q.y);
-  float alpha = atan2(sinr_cosp, cosr_cosp);
-
-  float sinp = 2.0 * (q.w * q.y - q.z * q.x);
-  // Handle gimbal lock at poles
-  float beta;
-  if (abs(sinp) >= 1) {
-    beta = copysign(M_PI / 2, sinp);
-  }
-  beta = asin(sinp);
-
-  float siny_cosp = 2.0 * (q.w * q.z + q.x * q.y);
-  float cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z);
-  float gamma = atan2(siny_cosp, cosy_cosp);
-
-  return {alpha, beta, gamma};
-}
-
-Quaternion euler_to_quaternion(const Vector3 &euler) {
-  float alpha = euler.x;
-  float beta = euler.y;
-  float gamma = euler.z;
-
-  // Calculate trig functions once
-  float ca = cos(alpha / 2);
-  float sa = sin(alpha / 2);
-  float cb = cos(beta / 2);
-  float sb = sin(beta / 2);
-  float cg = cos(gamma / 2);
-  float sg = sin(gamma / 2);
-
-  // Calculate quaternion components
-  float w = ca * cb * cg + sa * sb * sg;
-  float x = sa * cb * cg - ca * sb * sg;
-  float y = ca * sb * cg + sa * cb * sg;
-  float z = ca * cb * sg - sa * sb * cg;
-  return {x, y, z, w};
+Quaternion extract_yaw(const Quaternion &q) {
+  float theta =
+      atan2(2 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z));
+  float cos_half = cos(theta / 2.0);
+  float sin_half = sin(theta / 2.0);
+  return Quaternion{0, 0, sin_half, cos_half};
 }

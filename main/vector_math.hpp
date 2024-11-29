@@ -41,7 +41,6 @@ Vector3 slerp(const Vector3 &v1, const Vector3 &v2, float t);
 Quaternion slerp(const Quaternion &q1, const Quaternion &q2, float t);
 Vector3 rotate_vector(const Vector3 &v, const Quaternion &q);
 
-Vector3 quaternion_to_euler(const Quaternion &q);
-Quaternion euler_to_quaternion(const Vector3 &e);
+Quaternion extract_yaw(const Quaternion &q);
 
 #endif

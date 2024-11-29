@@ -66,17 +66,14 @@ Quaternion complementary_filter(const Quaternion &previous, const Vector3 &gyro,
   if (abs(dot_product - 1.0) < 1e-10) {
     return q_accel;
   }
-  Vector3 e_gyro = quaternion_to_euler(q_gyro);
-  Vector3 e_accel = quaternion_to_euler(q_accel);
-  float gyro_yaw = e_gyro.z;
-  e_gyro.z = 0;
-  e_accel.z = 0;
+  Quaternion gyro_yaw = extract_yaw(q_gyro);
+  Quaternion accel_yaw = extract_yaw(q_accel);
 
-  Quaternion q_new =
-      slerp(euler_to_quaternion(e_gyro), euler_to_quaternion(e_accel), t);
-  Vector3 e_new = quaternion_to_euler(q_new);
-  e_new.z = gyro_yaw;
-  auto q = euler_to_quaternion(e_new);
+  Quaternion q_gyro_no_yaw = multiply(inverse(gyro_yaw), q_gyro);
+  Quaternion q_accel_no_yaw = multiply(inverse(accel_yaw), q_accel);
+
+  Quaternion q_new = slerp(q_gyro_no_yaw, q_accel_no_yaw, t);
+  auto q = multiply(gyro_yaw, q_new);
   if (q.x != q.x) {
     ESP_LOGE("CF", "dt = %f", (double)dt);
     ESP_LOGE("CF", "tau = %f", (double)tau);
