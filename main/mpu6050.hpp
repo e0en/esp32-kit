@@ -40,9 +40,6 @@ private:
   int16_t accel_range = 2;  // unit = g
   int16_t gyro_range = 250; // unit = degree / second
 
-  esp_err_t select_register(uint8_t register_address);
-  esp_err_t read(uint8_t register_address, uint8_t *target, size_t length);
-  esp_err_t write(uint8_t register_address, uint8_t *source, size_t length);
   esp_err_t whoami();
   esp_err_t reset();
   esp_err_t use_gyrox_clock();
