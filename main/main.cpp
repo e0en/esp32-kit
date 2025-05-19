@@ -11,6 +11,7 @@ extern "C" {
 }
 
 #include "gpio.hpp"
+#include "i2c.hpp"
 #include "imu.hpp"
 #include "mpu6050.hpp"
 #include "mqtt.hpp"

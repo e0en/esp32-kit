@@ -49,8 +49,6 @@ private:
   esp_err_t wakeup();
 };
 
-void init_i2c(gpio_num_t sda_pin, gpio_num_t scl_pin);
-
 bool mpu6050_is_data_ready();
 
 #endif
