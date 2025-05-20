@@ -1,8 +1,8 @@
 #include "mpu6050.hpp"
+#include "driver/i2c_types.h"
 #include "i2c.hpp"
 
 extern "C" {
-#include <driver/i2c.h>
 #include <esp_err.h>
 #include <esp_log.h>
 #include <esp_timer.h>
@@ -39,7 +39,7 @@ const uint8_t GYRO_RANGE = 2;
 
 esp_err_t MPU6050::whoami() {
   uint8_t byte;
-  i2c_read(I2C_ADDRESS, REGISTER_WHO_AM_I, &byte, 1);
+  i2c_read(device_handle, REGISTER_WHO_AM_I, &byte, 1);
   bool is_matched = (byte == I2C_ADDRESS) || (byte == 0xC);
   if (is_matched) {
     return ESP_OK;
@@ -49,71 +49,64 @@ esp_err_t MPU6050::whoami() {
 
 esp_err_t MPU6050::reset() {
   uint8_t byte;
-  i2c_read(I2C_ADDRESS, REGISTER_WHO_AM_I, &byte, 1);
+  i2c_read(device_handle, REGISTER_WHO_AM_I, &byte, 1);
   byte |= (1 << 7);
-  i2c_write(I2C_ADDRESS, REGISTER_PWR_MGMT_1, &byte, 1);
+  i2c_write_byte(device_handle, REGISTER_PWR_MGMT_1, &byte);
   return ESP_OK;
 }
 
 esp_err_t MPU6050::use_gyrox_clock() {
   uint8_t byte;
-  i2c_read(I2C_ADDRESS, REGISTER_PWR_MGMT_1, &byte, 1);
+  i2c_read(device_handle, REGISTER_PWR_MGMT_1, &byte, 1);
   byte >>= 3;
   byte <<= 3;
   byte |= (uint8_t)1;
-  i2c_write(I2C_ADDRESS, REGISTER_PWR_MGMT_1, &byte, 1);
+  i2c_write_byte(device_handle, REGISTER_PWR_MGMT_1, &byte);
   return ESP_OK;
 }
 
 esp_err_t MPU6050::wakeup() {
   uint8_t byte;
-  i2c_read(I2C_ADDRESS, REGISTER_PWR_MGMT_1, &byte, 1);
+  i2c_read(device_handle, REGISTER_PWR_MGMT_1, &byte, 1);
   byte &= ~(1 << SLEEP_BIT);
-  i2c_write(I2C_ADDRESS, REGISTER_PWR_MGMT_1, &byte, 1);
+  i2c_write_byte(device_handle, REGISTER_PWR_MGMT_1, &byte);
   return ESP_OK;
 }
 
 uint8_t MPU6050::get_accel_range() {
   uint8_t byte;
-  i2c_read(I2C_ADDRESS, REGISTER_ACCEL_CONFIG, &byte, 1);
+  i2c_read(device_handle, REGISTER_ACCEL_CONFIG, &byte, 1);
   return (byte & 24) >> 3;
 }
 
 uint8_t MPU6050::get_gyro_range() {
   uint8_t byte;
-  i2c_read(I2C_ADDRESS, REGISTER_GYRO_CONFIG, &byte, 1);
+  i2c_read(device_handle, REGISTER_GYRO_CONFIG, &byte, 1);
   return (byte & 24) >> 3;
 }
 
 void MPU6050::set_filter_config(uint8_t flag) {
   uint8_t byte;
-  i2c_read(I2C_ADDRESS, REGISTER_CONFIG, &byte, 1);
+  i2c_read(device_handle, REGISTER_CONFIG, &byte, 1);
   byte = ((byte >> 3) << 3) | flag;
-  i2c_write(I2C_ADDRESS, REGISTER_CONFIG, &byte, 1);
+  i2c_write_byte(device_handle, REGISTER_CONFIG, &byte);
 }
 
 void MPU6050::set_accel_range(uint8_t range) {
   uint8_t byte = range << 3;
   accel_range = 2 << range;
-  i2c_write(I2C_ADDRESS, REGISTER_ACCEL_CONFIG, &byte, 1);
+  i2c_write_byte(device_handle, REGISTER_ACCEL_CONFIG, &byte);
 }
 
 void MPU6050::set_gyro_range(uint8_t range) {
   uint8_t byte = range << 3;
   gyro_range = 250 << range;
-  i2c_write(I2C_ADDRESS, REGISTER_GYRO_CONFIG, &byte, 1);
+  i2c_write_byte(device_handle, REGISTER_GYRO_CONFIG, &byte);
 }
 
 MPU6050::MPU6050() {
-  i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-
-  i2c_master_start(cmd);
-  i2c_master_write_byte(cmd, (I2C_ADDRESS << 1) | I2C_MASTER_WRITE, true);
-  i2c_master_stop(cmd);
-
-  esp_err_t ret = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(50));
-  i2c_cmd_link_delete(cmd);
-  ESP_ERROR_CHECK(ret);
+  i2c_master_bus_handle_t bus_handle = get_i2c_bus();
+  device_handle = add_i2c_device(bus_handle, I2C_ADDRESS);
 
   ESP_ERROR_CHECK(whoami());
   use_gyrox_clock();
@@ -127,13 +120,13 @@ MPU6050::MPU6050() {
 
 bool MPU6050::is_data_ready() {
   uint8_t byte;
-  i2c_read(I2C_ADDRESS, REGISTER_INTR_STATUS, &byte, 1);
+  i2c_read(device_handle, REGISTER_INTR_STATUS, &byte, 1);
   return byte % 2;
 }
 
 void MPU6050::read_accel_gyro(struct int16_3 *accel, struct int16_3 *gyro) {
   uint8_t bytes[14];
-  i2c_read(I2C_ADDRESS, REGISTER_ACCEL_XOUT_H, bytes, 14);
+  i2c_read(device_handle, REGISTER_ACCEL_XOUT_H, bytes, 14);
   accel->x = (int16_t)((bytes[0] << 8) | bytes[1]);
   accel->y = (int16_t)((bytes[2] << 8) | bytes[3]);
   accel->z = (int16_t)((bytes[4] << 8) | bytes[5]);
@@ -157,7 +150,7 @@ void MPU6050::read_accel_gyro_si(struct Vector3 *accel, struct Vector3 *gyro) {
 struct int16_3 MPU6050::read_accel() {
   struct int16_3 result;
   uint8_t bytes[6];
-  i2c_read(I2C_ADDRESS, REGISTER_ACCEL_XOUT_H, bytes, 6);
+  i2c_read(device_handle, REGISTER_ACCEL_XOUT_H, bytes, 6);
   result.x = (bytes[0] << 8) | bytes[1];
   result.y = (bytes[2] << 8) | bytes[3];
   result.z = (bytes[4] << 8) | bytes[5];
@@ -167,7 +160,7 @@ struct int16_3 MPU6050::read_accel() {
 struct int16_3 MPU6050::read_gyro() {
   struct int16_3 result;
   uint8_t bytes[6];
-  i2c_read(I2C_ADDRESS, REGISTER_GYRO_XOUT_H, bytes, 6);
+  i2c_read(device_handle, REGISTER_GYRO_XOUT_H, bytes, 6);
   result.x = ((bytes[0] << 8) | bytes[1]);
   result.y = ((bytes[2] << 8) | bytes[3]);
   result.z = ((bytes[4] << 8) | bytes[5]);
@@ -176,7 +169,7 @@ struct int16_3 MPU6050::read_gyro() {
 
 float MPU6050::read_temperature() {
   uint8_t bytes[2];
-  i2c_read(I2C_ADDRESS, REGISTER_TEMP_XOUT_H, bytes, 2);
+  i2c_read(device_handle, REGISTER_TEMP_XOUT_H, bytes, 2);
   int16_t reading = (bytes[0] << 8) | bytes[1];
   return (float)reading / 340.0 + 36.53;
 }

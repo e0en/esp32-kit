@@ -3,6 +3,7 @@
 
 extern "C" {
 #include <driver/gpio.h>
+#include <driver/i2c_types.h>
 #include <esp_err.h>
 }
 #include "vector_math.hpp"
@@ -40,6 +41,7 @@ private:
   int16_t accel_range = 2;  // unit = g
   int16_t gyro_range = 250; // unit = degree / second
 
+  i2c_master_dev_handle_t device_handle;
   esp_err_t whoami();
   esp_err_t reset();
   esp_err_t use_gyrox_clock();

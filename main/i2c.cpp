@@ -1,87 +1,63 @@
 #include "i2c.hpp"
+#include "driver/i2c_types.h"
+#include "hal/i2c_types.h"
+#include "soc/clk_tree_defs.h"
+
 extern "C" {
-#include <driver/i2c.h>
+#include <driver/i2c_master.h>
 }
 
 const unsigned BAUD_RATE = 400000;
+const i2c_port_t I2C_PORT = I2C_NUM_0;
 
-void init_i2c(gpio_num_t sda_pin, gpio_num_t scl_pin) {
-  i2c_config_t i2c_config = {.mode = I2C_MODE_MASTER,
-                             .sda_io_num = sda_pin,
-                             .scl_io_num = scl_pin,
-                             .sda_pullup_en = GPIO_PULLUP_ENABLE,
-                             .scl_pullup_en = GPIO_PULLUP_ENABLE,
-                             .master = {
-                                 .clk_speed = BAUD_RATE,
-                             }};
-  ESP_ERROR_CHECK(i2c_param_config(I2C_NUM_0, &i2c_config));
-  ESP_ERROR_CHECK(i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0));
+i2c_master_bus_handle_t init_i2c(gpio_num_t sda_pin, gpio_num_t scl_pin) {
+  i2c_master_bus_config_t bus_config;
+  bus_config.clk_source = I2C_CLK_SRC_DEFAULT;
+  bus_config.i2c_port = I2C_PORT;
+  bus_config.sda_io_num = sda_pin;
+  bus_config.scl_io_num = scl_pin;
+  bus_config.glitch_ignore_cnt = 7;
+  bus_config.trans_queue_depth = 0;
+  bus_config.flags = {
+      .enable_internal_pullup = true,
+      .allow_pd = false,
+  };
+
+  i2c_master_bus_handle_t bus_handle;
+  ESP_ERROR_CHECK(i2c_new_master_bus(&bus_config, &bus_handle));
+  return bus_handle;
 }
 
-esp_err_t i2c_select_register(uint16_t device_address,
-                              uint8_t register_address) {
-
-  esp_err_t error_code;
-  i2c_cmd_handle_t cmd;
-
-  cmd = i2c_cmd_link_create();
-  ESP_ERROR_CHECK(i2c_master_start(cmd));
-  ESP_ERROR_CHECK(
-      i2c_master_write_byte(cmd, (device_address << 1) | I2C_MASTER_WRITE, 1));
-  ESP_ERROR_CHECK(i2c_master_write_byte(cmd, register_address, 1));
-  ESP_ERROR_CHECK(i2c_master_stop(cmd));
-  error_code = i2c_master_cmd_begin(I2C_NUM_0, cmd, 1000 / portTICK_PERIOD_MS);
-  i2c_cmd_link_delete(cmd);
-  return error_code;
+i2c_master_bus_handle_t get_i2c_bus() {
+  i2c_master_bus_handle_t bus_handle;
+  i2c_master_get_bus_handle(I2C_PORT, &bus_handle);
+  return bus_handle;
 }
-esp_err_t i2c_read(uint16_t device_address, uint8_t register_address,
-                   uint8_t *target, size_t length) {
 
-  esp_err_t error_code;
-  i2c_cmd_handle_t cmd;
-  uint8_t retry_count = 0;
-  while (i2c_select_register(device_address, register_address) != ESP_OK) {
-    vTaskDelay(1 / portTICK_PERIOD_MS);
-    retry_count++;
-    if (retry_count >= 10) {
-      return ESP_ERR_INVALID_RESPONSE;
-    }
-  }
+i2c_master_dev_handle_t add_i2c_device(i2c_master_bus_handle_t bus_handle,
+                                       uint16_t device_address) {
+  i2c_device_config_t dev_config;
+  dev_config.dev_addr_length = I2C_ADDR_BIT_LEN_7;
+  dev_config.device_address = device_address;
+  dev_config.scl_speed_hz = BAUD_RATE;
+  dev_config.scl_wait_us = 0;
+  dev_config.flags = {
+      .disable_ack_check = true,
+  };
 
-  cmd = i2c_cmd_link_create();
-  ESP_ERROR_CHECK(i2c_master_start(cmd));
-  ESP_ERROR_CHECK(
-      i2c_master_write_byte(cmd, (device_address << 1) | I2C_MASTER_READ, 1));
-
-  if (length > 1) {
-    ESP_ERROR_CHECK(i2c_master_read(cmd, target, length - 1, I2C_MASTER_ACK));
-  }
-
-  ESP_ERROR_CHECK(
-      i2c_master_read_byte(cmd, &target[length - 1], I2C_MASTER_NACK));
-
-  ESP_ERROR_CHECK(i2c_master_stop(cmd));
-  error_code = i2c_master_cmd_begin(I2C_NUM_0, cmd, 1000 / portTICK_PERIOD_MS);
-  i2c_cmd_link_delete(cmd);
-  return error_code;
+  i2c_master_dev_handle_t dev_handle;
+  i2c_master_bus_add_device(bus_handle, &dev_config, &dev_handle);
+  return dev_handle;
 }
-esp_err_t i2c_write(uint16_t device_address, uint8_t register_address,
-                    uint8_t *source, size_t length) {
-  esp_err_t error_code;
-  i2c_cmd_handle_t cmd;
 
-  cmd = i2c_cmd_link_create();
-  ESP_ERROR_CHECK(i2c_master_start(cmd));
-  ESP_ERROR_CHECK(
-      i2c_master_write_byte(cmd, (device_address << 1) | I2C_MASTER_WRITE, 1));
-  ESP_ERROR_CHECK(i2c_master_write_byte(cmd, register_address, 1));
+esp_err_t i2c_read(i2c_master_dev_handle_t device_handle,
+                   uint8_t register_address, uint8_t *target, size_t length) {
+  return i2c_master_transmit_receive(device_handle, &register_address, 1,
+                                     target, length, 500);
+}
 
-  if (length > 1) {
-    ESP_ERROR_CHECK(i2c_master_write(cmd, source, length - 1, 0));
-  }
-  ESP_ERROR_CHECK(i2c_master_write_byte(cmd, source[length - 1], 1));
-  ESP_ERROR_CHECK(i2c_master_stop(cmd));
-  error_code = i2c_master_cmd_begin(I2C_NUM_0, cmd, 1000 / portTICK_PERIOD_MS);
-  i2c_cmd_link_delete(cmd);
-  return error_code;
+esp_err_t i2c_write_byte(i2c_master_dev_handle_t device_handle,
+                         uint8_t register_address, uint8_t *source) {
+  uint8_t data[2] = {register_address, *source};
+  return i2c_master_transmit(device_handle, data, 2, -1);
 }
