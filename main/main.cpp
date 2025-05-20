@@ -10,6 +10,7 @@ extern "C" {
 #include <nvs_flash.h>
 }
 
+#include "as5600.hpp"
 #include "gpio.hpp"
 #include "i2c.hpp"
 #include "imu.hpp"
@@ -25,7 +26,8 @@ extern "C" {
 gpio_num_t GREEN_LED_PIN = GPIO_NUM_8;
 gpio_num_t RED_LED_PIN = GPIO_NUM_10;
 
-SemaphoreHandle_t imu_mutex = xSemaphoreCreateMutex();
+SemaphoreHandle_t i2c_mutex = xSemaphoreCreateMutex();
+
 struct Vector3 gyro;
 struct Vector3 accel;
 struct Quaternion cf;
@@ -65,8 +67,14 @@ void initialize() {
 }
 
 void imu_task(void *pvParameters) {
-  auto imu = MPU6050();
-  imu.calibrate_gyro();
+  if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) != pdTRUE) {
+    ESP_LOGE("IMU", "Failed to take I2C mutex");
+    vTaskDelete(NULL);
+  }
+  auto mpu6050 = MPU6050();
+  xSemaphoreGive(i2c_mutex);
+
+  mpu6050.calibrate_gyro();
   gyro = {0.0, 0.0, 0.0};
   accel = {0.0, 0.0, 0.0};
   cf = {0.0, 0.0, 0.0, 1.0};
@@ -76,19 +84,38 @@ void imu_task(void *pvParameters) {
   int64_t prev = now;
   float dt = 0.0;
   while (1) {
-    if (imu.is_data_ready()) {
+    if (mpu6050.is_data_ready()) {
       now = get_timestamp_microseconds();
       dt = (now - prev) / 1e6;
       if (dt < 1e-4) {
         continue;
       }
       prev = now;
-      if (xSemaphoreTake(imu_mutex, portMAX_DELAY) == pdTRUE) {
-        imu.read_accel_gyro_si(&accel, &gyro);
+      if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE) {
+        mpu6050.read_accel_gyro_si(&accel, &gyro);
         cf = complementary_filter(cf, gyro, accel, dt, tau);
-        xSemaphoreGive(imu_mutex);
+        xSemaphoreGive(i2c_mutex);
       }
     }
+  }
+  vTaskDelete(NULL);
+}
+
+void as5600_task(void *pvParameters) {
+  if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) != pdTRUE) {
+    ESP_LOGE("AS5600", "Failed to take I2C mutex");
+    vTaskDelete(NULL);
+  }
+  auto as5600 = AS5600();
+  xSemaphoreGive(i2c_mutex);
+
+  while (1) {
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE) {
+      uint16_t angle = as5600.read_raw_angle();
+      ESP_LOGI("AS5600", "angle: %d", angle);
+      xSemaphoreGive(i2c_mutex);
+    }
+    vTaskDelay(100 / portTICK_PERIOD_MS);
   }
   vTaskDelete(NULL);
 }
@@ -100,9 +127,9 @@ void mqtt_task(void *pvParameters) {
   int64_t now = 0;
   while (1) {
     now = get_timestamp_microseconds();
-    if (xSemaphoreTake(imu_mutex, portMAX_DELAY) == pdTRUE) {
+    if (xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE) {
       buffer = {gyro, accel, cf, now};
-      xSemaphoreGive(imu_mutex);
+      xSemaphoreGive(i2c_mutex);
     }
     mqtt.publish(MQTT_TOPIC, reinterpret_cast<char *>(&buffer), sizeof(buffer),
                  0);
@@ -116,5 +143,6 @@ void mqtt_task(void *pvParameters) {
 extern "C" void app_main(void) {
   initialize();
   xTaskCreate(imu_task, "imu", 8192, NULL, 5, NULL);
+  xTaskCreate(as5600_task, "as5600", 8192, NULL, 5, NULL);
   xTaskCreate(mqtt_task, "mqtt", 8192, NULL, 5, NULL);
 }
