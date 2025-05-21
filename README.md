@@ -108,4 +108,4 @@ This codebase is designed as a starting point for your own ESP32-based sensor pr
 
 ## License
 
-[Insert your chosen license information here]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
