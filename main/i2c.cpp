@@ -50,6 +50,12 @@ i2c_master_dev_handle_t add_i2c_device(i2c_master_bus_handle_t bus_handle,
   return dev_handle;
 }
 
+bool detect_i2c_device(i2c_master_bus_handle_t bus_handle,
+                       uint16_t device_address) {
+  auto ret = i2c_master_probe(bus_handle, device_address, 500);
+  return ret == ESP_OK;
+}
+
 esp_err_t i2c_read(i2c_master_dev_handle_t device_handle,
                    uint8_t register_address, uint8_t *target, size_t length) {
   return i2c_master_transmit_receive(device_handle, &register_address, 1,

@@ -21,8 +21,6 @@ const uint8_t REGISTER_STATUS = 0x0B;
 const uint8_t REGISTER_RAW_ANGLE_H = 0x0C;
 const uint8_t REGISTER_RAW_ANGLE_L = 0x0D;
 
-const uint16_t I2C_ADDRESS = 0x36;
-
 AS5600::AS5600() {
   i2c_master_bus_handle_t bus_handle = get_i2c_bus();
   device_handle = add_i2c_device(bus_handle, I2C_ADDRESS);

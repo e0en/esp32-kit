@@ -18,8 +18,6 @@ const float GRAVITY = 9.80665;
 const float ACCEL_COEFFICIENT = GRAVITY / (1 << 15);
 const float GYRO_COEFFICIENT = DEGREE_TO_RADIAN / (1 << 15);
 
-const uint16_t I2C_ADDRESS = 0x68;
-
 const uint8_t REGISTER_CONFIG = 0x1A;
 const uint8_t REGISTER_GYRO_CONFIG = 0x1B;
 const uint8_t REGISTER_ACCEL_CONFIG = 0x1C;

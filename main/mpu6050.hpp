@@ -18,6 +18,8 @@ class MPU6050 {
 public:
   MPU6050();
 
+  const static uint16_t I2C_ADDRESS = 0x68;
+
   uint8_t get_accel_range();
   uint8_t get_gyro_range();
   void set_filter_config(uint8_t flag);

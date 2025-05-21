@@ -142,7 +142,14 @@ void mqtt_task(void *pvParameters) {
 
 extern "C" void app_main(void) {
   initialize();
-  xTaskCreate(imu_task, "imu", 8192, NULL, 5, NULL);
-  xTaskCreate(as5600_task, "as5600", 8192, NULL, 5, NULL);
+  i2c_master_bus_handle_t bus_handle = get_i2c_bus();
+  if (detect_i2c_device(bus_handle, MPU6050::I2C_ADDRESS)) {
+    ESP_LOGI("INIT", "MPU6050 detected");
+    xTaskCreate(imu_task, "imu", 8192, NULL, 5, NULL);
+  }
+  if (detect_i2c_device(bus_handle, AS5600::I2C_ADDRESS)) {
+    ESP_LOGI("INIT", "AS5600 detected");
+    xTaskCreate(as5600_task, "as5600", 8192, NULL, 5, NULL);
+  }
   xTaskCreate(mqtt_task, "mqtt", 8192, NULL, 5, NULL);
 }

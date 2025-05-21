@@ -16,6 +16,7 @@ enum AS5600_MagnetStatus {
 
 class AS5600 {
 public:
+  const static uint16_t I2C_ADDRESS = 0x36;
   AS5600();
   uint16_t read_raw_angle();
   AS5600_MagnetStatus read_magnet_status();
